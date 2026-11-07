@@ -2,6 +2,7 @@ import copy
 import json
 import os
 import sys
+from types import SimpleNamespace
 from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock
 
@@ -24,6 +25,7 @@ from ray.llm._internal.serve.routing_policies.kv_aware.constants import (
 )
 from ray.llm._internal.serve.routing_policies.kv_aware.vllm.tokenizer import (
     TokenizeError,
+    Tokenizer,
     build_tokenize_request,
 )
 from ray.serve._private.constants import (
@@ -230,6 +232,18 @@ class TestBuildTokenizeRequest:
         request = build_tokenize_request(payload, request_path=request_path)
         for attr, value in expected.items():
             assert getattr(request, attr) == value
+
+
+@pytest.mark.asyncio
+async def test_tokenize_returns_single_prompt_ids_uncopied():
+    ids = [5, 6, 7]
+    tokenizer = Tokenizer.__new__(Tokenizer)
+    tokenizer._model_config = SimpleNamespace(is_encoder_decoder=False)
+    tokenizer._merge_inline_system = False
+    tokenizer._render_chat = AsyncMock(return_value=[{"prompt_token_ids": ids}])
+    payload = {"messages": [{"role": "user", "content": "hi"}]}
+
+    assert await tokenizer.tokenize(payload, request_path="/v1/chat/completions") is ids
 
 
 class TestRoute:

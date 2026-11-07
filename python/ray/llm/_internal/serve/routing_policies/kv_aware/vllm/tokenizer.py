@@ -172,12 +172,13 @@ class Tokenizer:
             # exceptions are real bugs and should surface, not degrade routing.
             raise TokenizeError(str(e), status_code=400, type="BadRequestError")
 
-        input_ids: List[int] = []
-        for rendered_input in rendered_inputs:
-            components = extract_prompt_components(self._model_config, rendered_input)
-            if components.token_ids is not None:
-                input_ids.extend(components.token_ids)
-        return input_ids
+        # Single prompt only (see build_tokenize_request).
+        (rendered_input,) = rendered_inputs
+        token_ids = extract_prompt_components(
+            self._model_config, rendered_input
+        ).token_ids
+        # Request-owned list; skip the copy.
+        return token_ids if isinstance(token_ids, list) else list(token_ids or ())
 
     async def _get_disabled_thinking_effort(self):
         """Resolve disabled thinking by rendering local prompts."""

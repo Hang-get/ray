@@ -1,3 +1,4 @@
+import json
 import sys
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -22,6 +23,7 @@ from ray.llm._internal.serve.core.ingress.ingress import (
 )
 from ray.llm._internal.serve.core.ingress.router import (
     LLMRouter,
+    _parse_request_body,
     _parse_routing_payload,
 )
 from ray.llm._internal.serve.core.server.llm_server import LLMServer
@@ -349,6 +351,26 @@ class TestRoutingPayload:
     )
     def test_returns_none_when_no_key_derivable(self, body):
         assert _parse_routing_payload(body) is None
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            b'{"a":[1,{"b":null}],"c":-0.0,"d":0.1,"a":2}',
+            b'{"a":123456789012345678901234567890}',
+            b'{"a":1',
+            # msgspec rejects; json.loads accepts.
+            b'{"a":1e400}',
+            b'{"a":NaN}',
+            b'{"a":"\\ud800"}',
+            b'\xef\xbb\xbf{"a":1}',
+        ],
+    )
+    def test_parse_request_body_matches_json_loads(self, body):
+        try:
+            expected = json.loads(body)
+        except ValueError:
+            expected = None
+        assert repr(_parse_request_body(body)) == repr(expected)
 
     @pytest.mark.asyncio
     async def test_payload_satisfies_prefix_router_contract(self):

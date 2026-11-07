@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import httpx
+import numpy as np
 import pytest
 import zmq
 from fastapi import FastAPI, Request
@@ -86,6 +87,20 @@ async def _wait_until_staged(store, keys):
             return
         await asyncio.sleep(0.01)
     pytest.fail(f"Timed out waiting for staged prompt tokens: {sorted(remaining)}")
+
+
+@pytest.mark.parametrize("ids", [[], [0, 1, 151_643, 2**32 - 1], [True, 7]])
+def test_encode_matches_numpy(ids):
+    assert encode_prompt_token_ids(ids) == np.asarray(ids, dtype="<u4").tobytes()
+
+
+@pytest.mark.parametrize(
+    "ids, match",
+    [([-1], "uint32"), ([2**32], "uint32"), ([[1, 2]], "one-dimensional")],
+)
+def test_encode_rejects_invalid_ids(ids, match):
+    with pytest.raises(ValueError, match=match):
+        encode_prompt_token_ids(ids)
 
 
 def test_sender_exceeds_default_socket_cap():

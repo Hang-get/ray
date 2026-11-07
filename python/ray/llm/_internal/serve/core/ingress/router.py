@@ -42,13 +42,28 @@ _ROUTING_KEY_FIELDS = ("messages", "prompt")
 
 router_app = FastAPI()
 
+try:
+    import msgspec  # Optional; ships with vLLM.
+except ImportError:
+    msgspec = None
+
+
+def _json_loads(body: bytes) -> Any:
+    """Fast ``json.loads``."""
+    if msgspec is not None:
+        try:
+            return msgspec.json.decode(body)
+        except msgspec.DecodeError:
+            pass  # e.g. NaN, which json.loads accepts.
+    return json.loads(body)
+
 
 def _parse_request_body(body: bytes) -> Optional[Dict[str, Any]]:
     """Parse an OpenAI JSON request body into an object."""
     if not body:
         return None
     try:
-        data = json.loads(body)
+        data = _json_loads(body)
     except (ValueError, TypeError):
         return None
     return data if isinstance(data, dict) else None

@@ -1,6 +1,8 @@
+import array
 import asyncio
 import contextlib
 import dataclasses
+import sys
 import time
 from collections import OrderedDict
 from typing import List, Optional
@@ -24,9 +26,17 @@ from ray.llm._internal.serve.routing_policies.kv_aware.network_utils import (
 
 logger = get_logger(__name__)
 
+_ARRAY_IS_UINT32_LE = sys.byteorder == "little" and array.array("I").itemsize == 4
+
 
 def encode_prompt_token_ids(token_ids: List[int]) -> bytes:
     """Encode token IDs as compact raw little-endian uint32 bytes."""
+    if _ARRAY_IS_UINT32_LE and isinstance(token_ids, list):
+        # ~5x faster than numpy.
+        try:
+            return array.array("I", token_ids).tobytes()
+        except (OverflowError, TypeError):
+            pass  # Let numpy handle it.
     try:
         arr = np.asarray(token_ids, dtype="<u4")
     except OverflowError as e:
